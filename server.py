@@ -10,7 +10,7 @@ TOKEN = "ABC12345"
 
 @app.route("/")
 def home():
-    return jsonify({"status": "MT5→MT4 Bridge running", "time": time.ctime(),LATEST_TRADE })
+    return jsonify({"status": "MT5 MT4 Bridge running", "time": time.ctime(),"gg":LATEST_TRADE })
 
 @app.route("/send_trade", methods=["POST"])
 def send_trade():
