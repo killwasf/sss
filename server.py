@@ -1,54 +1,51 @@
 from flask import Flask, request, jsonify
-from flask_socketio import SocketIO, emit
-import time, uuid
+from flask_cors import CORS
+import time
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app)
 
-commands = []
+# Simple in-memory store for the latest trade
+# Structure: { 'symbol':..., 'type': 'BUY'/'SELL', 'lots': float, 'price': float, 'timestamp': float }
+latest_trade = None
 SHARED_TOKEN = "ABC12345"
 
-@app.route('/')
-def home():
-    return "✅ MT5–MT4 Bridge Online"
+@app.route("/")
+def index():
+    return "MT5 ⇄ MT4 Bridge Active ✅"
 
-@app.route('/api/trade', methods=['POST'])
-def receive_trade():
-    token = request.headers.get('X-API-KEY', '')
+@app.route("/api/send_trade", methods=["POST"])
+def send_trade():
+    global latest_trade
+    token = request.headers.get('X-API-KEY','')
     if token != SHARED_TOKEN:
-        return jsonify({"error": "unauthorized"}), 401
+        return jsonify({'error':'unauthorized'}), 401
     data = request.get_json(force=True, silent=True)
     if not data:
-        return jsonify({"error": "bad json"}), 400
-    cmd = {"id": str(uuid.uuid4()), "timestamp": time.time(), "command": data}
-    commands.append(cmd)
-    socketio.emit('trade', cmd)
-    return jsonify({"status": "ok", "id": cmd["id"]})
+        return jsonify({'error':'bad json'}), 400
+    # normalize fields
+    trade = {
+        'symbol': data.get('symbol'),
+        'type': data.get('type'),
+        'lots': float(data.get('lots', 0)),
+        'price': float(data.get('price', 0)),
+        'timestamp': time.time()
+    }
+    latest_trade = trade
+    print("📩 New trade:", trade)
+    return jsonify({'status':'ok','received':trade})
 
-@app.route('/api/commands', methods=['GET'])
-def get_commands():
-    token = request.headers.get('X-API-KEY', '')
-    if token != SHARED_TOKEN:
-        return jsonify({"error": "unauthorized"}), 401
-    since = float(request.args.get('since', '0'))
-    result = [c for c in commands if c['timestamp'] > since]
-    return jsonify({"commands": result, "server_time": time.time()})
-
-@app.route('/api/ack', methods=['POST'])
-def ack_command():
-    token = request.headers.get('X-API-KEY', '')
-    if token != SHARED_TOKEN:
-        return jsonify({"error": "unauthorized"}), 401
-    payload = request.get_json(force=True)
-    cid = payload.get('id')
-    global commands
-    commands = [c for c in commands if c['id'] != cid]
-    return jsonify({"status": "acked", "id": cid})
+@app.route("/api/last_trade", methods=["GET"])
+def last_trade():
+    if latest_trade is None:
+        return jsonify({}), 200
+    return jsonify(latest_trade), 200
 
 if __name__ == '__main__':
+    # for Render use eventlet if available; fallback to werkzeug
     try:
         import eventlet
         import eventlet.wsgi
-        socketio.run(app, host='0.0.0.0', port=10000)
+        app.run(host='0.0.0.0', port=10000)
     except Exception:
-        socketio.run(app, host='0.0.0.0', port=10000, allow_unsafe_werkzeug=True)
+        app.run(host='0.0.0.0', port=10000)
