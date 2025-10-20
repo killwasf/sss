@@ -1,64 +1,37 @@
-# ============================================================
-#  MT5 → MT4 Trade Copier Bridge Server
-#  Flask + CORS | Render-ready | Token-secured
-# ============================================================
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import time
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# --- Security token (same as in MT5 & MT4 EAs) ---
+LATEST_TRADE = None
 TOKEN = "ABC12345"
 
-# --- In-memory storage for the last trade ---
-last_trade = None
-last_time = None
-
-
-@app.route('/')
+@app.route("/")
 def home():
-    return jsonify({"status": "running", "message": "MT5↔MT4 bridge active"}), 200
+    return jsonify({"status": "MT5→MT4 Bridge running", "time": time.ctime()})
 
-
-@app.route('/api/send_trade', methods=['POST'])
+@app.route("/send_trade", methods=["POST"])
 def send_trade():
-    """Receive trade signal from MT5 EA"""
-    global last_trade, last_time
+    global LATEST_TRADE
+    data = request.json
 
-    # --- Authorization ---
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer ") or auth_header.split(" ")[1] != TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
+    if not data or data.get("token") != TOKEN:
+        return jsonify({"error": "Invalid token"}), 403
 
-    # --- Parse incoming trade ---
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "No JSON received"}), 400
+    LATEST_TRADE = data
+    print(f"✅ Received trade: {LATEST_TRADE}")
+    return jsonify({"status": "received", "time": time.ctime()})
 
-    # Example data: {"symbol":"XAUUSD","type":"buy","lots":0.01,"price":2374.51}
-    last_trade = data
-    last_time = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+@app.route("/get_trade", methods=["GET"])
+def get_trade():
+    global LATEST_TRADE
+    if LATEST_TRADE:
+        trade = LATEST_TRADE
+        LATEST_TRADE = None
+        return jsonify(trade)
+    return jsonify({"status": "no_trade"})
 
-    print(f"[{last_time}] ✅ Trade received: {last_trade}")
-    return jsonify({"status": "stored", "trade": last_trade}), 200
-
-
-@app.route('/api/last_trade', methods=['GET'])
-def get_last_trade():
-    """MT4 EA polls here to fetch the latest trade"""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer ") or auth_header.split(" ")[1] != TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    if not last_trade:
-        return jsonify({"status": "no trades"}), 200
-
-    return jsonify(last_trade), 200
-
-
-if __name__ == '__main__':
-    # Use Flask's built-in dev server for local testing
-    # On Render, gunicorn will be used automatically
-    app.run(host='0.0.0.0', port=10000, debug=False)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
