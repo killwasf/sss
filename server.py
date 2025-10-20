@@ -46,4 +46,9 @@ def ack_command():
     return jsonify({"status": "acked", "id": cid})
 
 if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=10000)
+    try:
+        import eventlet
+        import eventlet.wsgi
+        socketio.run(app, host='0.0.0.0', port=10000)
+    except Exception:
+        socketio.run(app, host='0.0.0.0', port=10000, allow_unsafe_werkzeug=True)
