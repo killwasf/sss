@@ -1,7 +1,11 @@
 services:
   - type: web
-    name: mt5-mt4-bridge
+    name: mt-bridge
     env: python
+    region: frankfurt
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT server:app
+    startCommand: python server.py
+    envVars:
+      - key: TOKEN
+        value: ABC12345
