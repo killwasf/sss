@@ -33,15 +33,16 @@ def receive_trade():
         return jsonify({"error": str(e)}), 400
 
 
-@app.route('/get_trade', methods=['GET'])
+@app.route("/send_trade", methods=["POST"])
 def send_trade():
-    token = request.args.get('token')
-    if token == latest_trade.get("token"):
-        print("📤 MT4 fetching trade:", latest_trade)
-        return jsonify(latest_trade)
-    else:
-        print("⚠️ Invalid token or no trade yet.")
-        return jsonify({"status": "no_trade"}), 404
+    try:
+        data = request.get_json(force=True)
+        print("📩 Received trade:", data)
+        # You can add validations or actions here
+        return jsonify({"status": "ok", "received": data}), 200
+    except Exception as e:
+        print("❌ Error:", str(e))
+        return jsonify({"error": str(e)}), 400
 
 
 if __name__ == '__main__':
