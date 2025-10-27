@@ -116,30 +116,40 @@ wss.on('connection', (ws, req) => {
       }
       
       // Handle trade signals from master
+      // Handle trade signals from master
       if (data.type === 'trade_signal') {
         console.log('>>> PROCESSING TRADE SIGNAL FROM MASTER');
         console.log('Signal:', JSON.stringify(data.signal, null, 2));
-        
+      
+        // Normalize fields
+        const rawSymbol = data.signal.symbol || "";
+        const normalizedSymbol = rawSymbol.replace("/", "").replace("-", ""); // e.g. BTC/USDT → BTCUSDT
+      
+        const action = data.signal.action || data.signal.type || "buy"; // fallback
+        const lots = Number(data.signal.lots) || 0.10; // default lot size
+      
         // Broadcast to all slaves
         let successCount = 0;
         clients.slaves.forEach((slaveWs, slaveId) => {
           if (slaveWs.readyState === WebSocket.OPEN) {
             const tradeCommand = {
               type: 'trade',
-              symbol: data.signal.symbol,
-              orderType: data.signal.type,
-              lots: data.signal.lots,
+              action: action,                      // ✅ EA expects this
+              symbol: normalizedSymbol,            // ✅ fixed symbol format
+              lots: lots,
               stopLoss: data.signal.stopLoss || 0,
               takeProfit: data.signal.takeProfit || 0,
-              masterAccount: clientInfo?.accountId,
+              masterAccount: clientInfo?.accountId || "unknown",
               timestamp: new Date().toISOString()
             };
+      
             slaveWs.send(JSON.stringify(tradeCommand));
             console.log(`    → Sent to slave: ${slaveId}`);
+            console.log(`      JSON: ${JSON.stringify(tradeCommand)}`);
             successCount++;
           }
         });
-        
+      
         // Send confirmation back to master
         const confirmation = {
           type: 'signal_broadcasted',
@@ -151,6 +161,7 @@ wss.on('connection', (ws, req) => {
         console.log('=============================================\n');
         return;
       }
+
       
       // Handle execution reports from slaves
       if (data.type === 'execution_report') {
