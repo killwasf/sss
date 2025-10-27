@@ -121,36 +121,40 @@ wss.on('connection', (ws, req) => {
         console.log('>>> PROCESSING TRADE SIGNAL FROM MASTER');
         console.log('Signal:', JSON.stringify(data.signal, null, 2));
       
-        // Normalize fields
+        // Normalize symbol
         const rawSymbol = data.signal.symbol || "";
-        const normalizedSymbol = rawSymbol.replace("/", "").replace("-", ""); // e.g. BTC/USDT → BTCUSDT
+        const normalizedSymbol = rawSymbol.replace("/", "").replace("-", "");
       
-        const action = data.signal.action || data.signal.type || "buy"; // fallback
-        const lots = Number(data.signal.lots) || 0.10; // default lot size
+        // Normalize action
+        const action = data.signal.action || data.signal.type || "buy";
+        const lots = Number(data.signal.lots) || 0.10;
       
-        // Broadcast to all slaves
+        // Correct broadcast message
+        const broadcastMessage = {
+          type: 'trade_signal',
+          signal: {
+            action: action,
+            symbol: normalizedSymbol,
+            lots: lots,
+            stopLoss: data.signal.stopLoss || 0,
+            takeProfit: data.signal.takeProfit || 0,
+            masterAccount: clientInfo?.accountId || "unknown",
+            timestamp: new Date().toISOString()
+          }
+        };
+      
+        // Send to all slaves
         let successCount = 0;
         clients.slaves.forEach((slaveWs, slaveId) => {
           if (slaveWs.readyState === WebSocket.OPEN) {
-            const tradeCommand = {
-              type: 'trade',
-              action: action,                      // ✅ EA expects this
-              symbol: normalizedSymbol,            // ✅ fixed symbol format
-              lots: lots,
-              stopLoss: data.signal.stopLoss || 0,
-              takeProfit: data.signal.takeProfit || 0,
-              masterAccount: clientInfo?.accountId || "unknown",
-              timestamp: new Date().toISOString()
-            };
-      
-            slaveWs.send(JSON.stringify(tradeCommand));
+            slaveWs.send(JSON.stringify(broadcastMessage));
             console.log(`    → Sent to slave: ${slaveId}`);
-            console.log(`      JSON: ${JSON.stringify(tradeCommand)}`);
+            console.log(`      JSON: ${JSON.stringify(broadcastMessage)}`);
             successCount++;
           }
         });
       
-        // Send confirmation back to master
+        // Confirmation back to master
         const confirmation = {
           type: 'signal_broadcasted',
           slavesNotified: successCount,
@@ -161,6 +165,7 @@ wss.on('connection', (ws, req) => {
         console.log('=============================================\n');
         return;
       }
+
 
       
       // Handle execution reports from slaves
