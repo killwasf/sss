@@ -125,14 +125,16 @@ wss.on('connection', (ws, req) => {
         const rawSymbol = data.signal.symbol || "";
         const normalizedSymbol = rawSymbol.replace("/", "").replace("-", "");
       
-        // Normalize action
+        // Extract data
         const action = data.signal.action || data.signal.type || "buy";
-        const lots = Number(data.signal.lots) || 0.10;
+        const lots = Number(data.signal.lots) || Number(data.signal.volume) || 0.10;
+        const ticket = data.signal.ticket || 0; // ✅ preserve master ticket ID
       
-        // Correct broadcast message
+        // Build broadcast message (now includes ticket)
         const broadcastMessage = {
           type: 'trade_signal',
           signal: {
+            ticket: ticket, // ✅ keep master ticket ID
             action: action,
             symbol: normalizedSymbol,
             lots: lots,
@@ -161,6 +163,7 @@ wss.on('connection', (ws, req) => {
           timestamp: new Date().toISOString()
         };
         ws.send(JSON.stringify(confirmation));
+      
         console.log(`>>> BROADCAST COMPLETE: ${successCount} slaves notified`);
         console.log('=============================================\n');
         return;
